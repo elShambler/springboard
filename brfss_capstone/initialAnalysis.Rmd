@@ -1,0 +1,91 @@
+---
+title: "BRFSS Output Detail"
+output: html_document
+---
+
+### Overview 
+BRFSS data are survery responses over multiple years, where respondents answer questions that will give an indication on future health based on their behaviorial factors.
+This dataset is from 2011 until 2013.
+
+```{r, echo=FALSE, message=FALSE}
+library(dplyr)
+brfss_df <- read.csv("C:/Users/Tomas/Downloads/Behavioral_Risk_Factor_Surveillance_System__BRFSS__Prevalence_Data__2011_to_present_.csv",
+                     stringsAsFactors = FALSE)
+brfss_df <- brfss_df %>% rename(Year = ï..Year)
+
+pa_class <- brfss_df %>% filter(Class == "Physical Activity")
+response_yes <- pa_class %>% filter(Response == "Yes", BreakOutCategoryID == "CAT1") %>% 
+                          group_by(Topic, Year) %>% 
+                          summarise(cnt = n(), n_sample = sum(Sample_Size))
+
+response_no <- pa_class %>% filter(Response == "No", BreakOutCategoryID == "CAT1") %>% 
+                            group_by(Topic, Year) %>% 
+                            summarise(cnt = n(), n_sample = sum(Sample_Size))
+
+response_tot <- pa_class %>% filter(BreakOutCategoryID == "CAT1") %>% 
+                              group_by(Topic, Year) %>% 
+                              summarise(cnt = n(), total_sample = sum(Sample_Size))
+```
+### Breakdown of Data
+The dataset goes over multiple questions covering multiple categories or "Classes" (18 of them), ranging from general health, demographics, to what kind of food is being eaten, and physical activity. These are all indicators the CDC has identified as being relevant towards tracking an individuals health. Full topics are shown in the appendix.
+
+Within a single Class, there are multiple Topics. An example of the topic and its associated questions are below:
+
+```{r, tidy=TRUE}
+pa_class %>% select(Topic, Question) %>% distinct()
+```
+Responses for these are either a yes or no for this topic, so can be broken down on a boolean basis. This allows for a simple proportion of YES answers giving a good representation of the overall response.
+
+For some reason, there was only one question for Physical Activity asked in 2012. Below you can see the results broken out over year.
+
+
+```{r, echo=FALSE}
+# Setup total number of response to get % answered
+n_tot_2011 <- response_tot %>% filter(Year == 2011) %>% select(Topic, total_sample)
+n_tot_2012 <- response_tot %>% filter(Year == 2012) %>% select(Topic, total_sample)
+n_tot_2013 <- response_tot %>% filter(Year == 2013) %>% select(Topic, total_sample)
+
+
+yes_2011 <- response_yes %>% filter(Year == 2011) %>% select(Topic, n_sample)
+yes_2012 <- response_yes %>% filter(Year == 2012) %>% select(Topic, n_sample)
+yes_2013 <- response_yes %>% filter(Year == 2013) %>% select(Topic, n_sample)
+
+# Combine the YES data with total to get proportion answered YES
+yes_2011 <- left_join(yes_2011, n_tot_2011, by = "Topic") %>% mutate(valProp = n_sample/total_sample)
+yes_2012 <- left_join(yes_2012, n_tot_2012, by = "Topic") %>% mutate(valProp = n_sample/total_sample)
+yes_2013 <- left_join(yes_2013, n_tot_2013, by = "Topic") %>% mutate(valProp = n_sample/total_sample)
+
+#Rewrite yes_2012 since it only has one Topic that was answered
+yes_2012 <- c(0, yes_2012$valProp, 0, 0)
+
+g_range <- range(yes_2011$valProp, yes_2013$valProp)
+
+# Now let's plot
+plot(x = 1:4, ylim = c(0,g_range[2]*1.1), y = yes_2011$valProp, xaxt = 'n', ann = FALSE, pch = 16, bty = "l")
+points(yes_2012, pch = 21)
+points(yes_2013$valProp, pch = 25)
+axis(1, at = 1:4, lab = yes_2011$Topic)
+
+legend(1, g_range[2], c("2011", "2012", "2013"), 
+       cex = 1, pch = c(16,21,25))
+
+title(xlab = "Topic", ylab = "Proportion Answered YES", main = "Physical Activity Responses")
+```
+
+The above shows what proportion of respondents answered "YES." The CDC has done work to further classify each category with its own data value. What this means is it calculates a proportion for the answer within the respective group. For example, if we were looking at the overall group for Exercise in Alaska, we would see the different data values, along with the respective high and low confidence limits. Let's look at that below.
+
+
+> `r pa_class %>% filter(Topic == "Exercise") %>% select(Question) %>% distinct()`
+
+
+```{r, echo = FALSE}
+pa_class %>% filter(Locationabbr == "AK", Topic == "Exercise", BreakOutCategoryID == "CAT1") %>%
+        select(Year, Response, Sample_Size, Data_value, Confidence_limit_Low, Confidence_limit_High, Data_value_unit)
+```
+
+### Final Remarks
+
+Additional work can be done to break out how these changed over the years of response, and/or by state and age group. Additionally, there are multiple other Classes each having their own Topic that can lead to additional insight, and what constitutes a healthy individual.
+
+Something of note - Work has been done to this dataset already to clean it up and tally the total number of respondents per category along with giving an estimate value for the response (given in %), with a low and high confidence limit to that number. Due to the fact that a significant
+amount of work has already been to ensure the data is clean, it brings in the question whether or not this dataset is suitable for a Capstone Project.
