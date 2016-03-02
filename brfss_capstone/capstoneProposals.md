@@ -1,0 +1,11 @@
+## Initial Proposal for Capstone Project
+
+### Ideas
+
+I have carried out some of the course before settling on a dataset that I think will be suitable for the project.
+
+My goal is to use the Behaviorial Risk Factor Surveillance System (BRFSS) data published from the CDC. [Located at their site](https://chronicdata.cdc.gov/Behavioral-Risk-Factors/Behavioral-Risk-Factor-Surveillance-System-BRFSS-P/dttw-5yxu).
+
+1. My goal is to use the Behaviorial Risk Factor Surveillance System (BRFSS) data published from the CDC. [Located at their site](https://chronicdata.cdc.gov/Behavioral-Risk-Factors/Behavioral-Risk-Factor-Surveillance-System-BRFSS-P/dttw-5yxu). I would like to analyze and determine the factors that affect someone being healthy the most. Within the dataset, there are multiple questions/factors analyzed, and I'd like to explore and determine if it's just physical activity or demographics or perhaps general demographics? There are over 58 factors that are tracked, so it would be interesting to explore which ones affect the overall health of a person. Additionally, I can also show the change in overall health over time (1984-2013).
+
+2. Another stretch project that I was hoping to work on deals with the website [Trail Runner Project](http://www.trailrunproject.com/). Because trail running and ultra running are a passion of mine, I wanted to be able to explore different trails across the nation. One of the interesting factors in trail running is the fact that not even if a trail has the same distance or even same elevation change, one trail may be more challenging due to it's technicality or runnability. This project contains all that information for trails that are reported by users. The proposal for a project would be to take in the data surrounding the different trails, and determine areas across the US that have more difficulty based on runnability and elevation gain/loss. I have requested API access, but currently they only provide the location of the trail and its ranking, but nothing else. I have emailed them to see if they can additional features, so will need to wait to hear back. Perhaps I could crawl the website instead to obtain the data?
