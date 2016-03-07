@@ -12,6 +12,9 @@ setwd("C:/Users/castillo/OneDrive/School/SlideRule/FoundationsDS/dataWrangling/"
 df_original <- tbl_df(read.csv("refine_original.csv", stringsAsFactors = F))
 ```
 ## Overview
+
+The HTML version of this .rmd file can be viewed at my [gh-pages](elshambler.github.io/refine_original.html).
+
 Section 3.1 of Data Wrangling goes over the fundamentals of how to refine data. The original data given looks like below:
 
 ```{r echo=FALSE}
