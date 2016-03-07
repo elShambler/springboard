@@ -1,0 +1,129 @@
+---
+title: "Refining Data"
+author: "Tomás"
+date: "March 7, 2016"
+output: html_document
+---
+```{r, echo=FALSE, message=FALSE}
+library(dplyr)
+library(tidyr)
+
+setwd("C:/Users/castillo/OneDrive/School/SlideRule/FoundationsDS/dataWrangling/")
+df_original <- tbl_df(read.csv("refine_original.csv", stringsAsFactors = F))
+```
+## Overview
+Section 3.1 of Data Wrangling goes over the fundamentals of how to refine data. The original data given looks like below:
+
+```{r echo=FALSE}
+head(df_original)
+```
+
+### Typos And Company Names
+
+There are misspellings (e.g. '`r paste(df_original$company[1])`' which should be 'philips') and a
+column that combines a product code with its product number (e.g. '`r paste(df_original$Product.code...number[1])`').
+
+I made a dictionary type list that contained the different first letters of the companies, and the standardized name to go with.
+
+```{r}
+comp_char <- list(c("f", "a","v","u"), 
+                  c("philips","akzo", "van houten", "unilever"))
+```
+
+
+The list made it easy to run a _for_ loop over different companies. After analyzing the types of typos, I made sure to iterate over the 'philips' first
+since it had a first letter typo. I created a _len_ column that displayed the company's number of characters, but ended up not needing it.
+With my filters in place, I created a temporary dataframe (storing only the companies I wanted) and added the rows together using rbind. I wanted to
+practice using multiple methods of combining data.
+
+```{r}
+for (i in 1:4) {
+  if (i == 1) {
+    
+    df_original <- df_original %>% 
+      mutate(company = tolower(company), 
+             len = nchar(company), 
+             first_char = substr(company, 1, 1))
+    
+    df <- df_original %>% 
+      filter(first_char == "p" | first_char == "f") %>% 
+      mutate(company = comp_char[[2]][i])
+    
+  } else {
+    
+    df_temp <- df_original %>% 
+      filter(first_char == comp_char[[1]][i]) %>% 
+      mutate(company = comp_char[[2]][i])
+    
+    df <- rbind(df, df_temp)
+  }
+}
+
+## Clean up a little
+rm(df_temp)
+```
+
+### Products & Categories
+
+We can use the built-in `TIDYR::separate` to split up the columns and create a list similar to before for the categories of the product code.
+This time, I used a little more efficient method of creating the columns.
+
+Also included the step to add the full address and re-order columns using `DPLYR::select(everything())`.
+
+```{r}
+prod_cat <- list(p = 'smartphone', v = 'tv', x = 'laptop', q = 'tablet')
+
+df <- df %>% separate(Product.code...number, 
+                      c('product_code', 'product_number'), sep='-')
+
+df <- df %>% mutate(product_category = paste0(prod_cat[product_code]), 
+                    full_address = paste(address, city, country, sep = ","))
+
+df <- df %>% select(-(address:name),everything())
+
+## Clean up a little more
+df$len <- NULL
+df$first_char <- NULL
+```
+
+### Binary Columns
+
+When adding the binary columns, we're basically creating a flag for companies.
+
+```{r}
+df$company == 'philips'
+```
+
+An easy solution was to just convert the the `TRUE | FALSE` to `1 | 0`. Since I already had a list of the product categories, and company names, it made this step relatively quick with a _for_ loop.
+
+```{r}
+### Since we already have a list defined for the companies, we'll use a for loop to go through each one and
+###  evaluate each company, while adding a header that corresponds to the company we're evaluating
+
+for (i in 1:4) {
+  i_company <- comp_char[[2]][i]
+  i_header <- paste("company", i_company, sep = "_")
+  df[[paste0(i_header)]] <- as.numeric(df$company == paste0(i_company))
+}
+
+### Similarly, we'll do the same thing with the product category
+### We'll just use the product's code (p, v, x, q) along with it's list we created earlier
+
+for (i in 1:4) {
+  i_product <- names(prod_cat)[i]
+  i_header <- paste("product", prod_cat[i], sep = "_")
+  df[[paste0(i_header)]] <- as.numeric(df$product_code == paste0(i_product))
+}
+
+### And clean up the mess again
+rm(i_company, i_header, i_product)
+```
+
+### Output
+
+Lastly, we'll write the output file and consider this done!
+
+```{r}
+head(tbl_df(df))
+write.csv(df, file = "refine_clean.csv")
+```
