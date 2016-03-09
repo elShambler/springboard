@@ -1,0 +1,156 @@
+---
+title: "Wrangling the Titanic"
+author: "Tomás Castillo"
+date: "March 9, 2016"
+output: html_document
+---
+
+```{r, echo=FALSE, message=FALSE}
+library(dplyr)
+library(tidyr)
+
+setwd('C:/Users/castillo/OneDrive/School/Springboard/FoundationsDS/dataWrangling/dw_2/')
+titanic_original <- tbl_df(read.csv('titanic_original.csv', stringsAsFactors = F))
+```
+### Setup and Initial Look
+
+The output to the .rmd file can be viewed as an HTML on my [github pages](https://elshambler.github.io/titanic_refine.rmd).
+
+I first took the data from it's source and opened it as an excel document and saved as CSV. That way, the formatting was correct and quite simple to get to a good starting point.
+For some reason, the import added a line at the end that was completely blank... so we'll just remove that.
+
+```{r}
+titanic_original <- tbl_df(read.csv('titanic_original.csv', stringsAsFactors = F))
+titanic_original <- titanic_original[-nrow(titanic_original),]
+```
+
+Then we'll take a gander at what the data looks like:
+
+```{r, echo = F}
+head(titanic_original)
+```
+
+### Filling in the Blanks
+
+We are told the blank values in the `embarked` column should be an 'S' as they departed from Southampton.
+
+```{r}
+titanic_original$embarked[
+  which(nchar(titanic_original$embarked) == 0)] = "S"
+```
+
+Next, we'll be filling in the blanks for the ages as well. The assignment asked us to fill in the blanks with average age of everyone on the boat. A different approach might be to break out the average age by sex. So I went ahead and did it that way.
+
+
+However, I noticed that the fare also had one missing value, so I took the average of the fare column and used that. Another approach could determine which `pclass` the missing value belongs to, and fill it in with its respective class's average fare.
+
+Also of note, `ifelse` became a very valuable command to use with a simple one line if-statement (or nested).
+
+```{r}
+# First we'll store the mean values
+
+age_mean_m <- round(
+  as.double(
+    titanic_original %>% 
+      filter(!is.na(age), sex == 'male') %>% 
+      summarise(mean(age))
+    )
+  )
+
+age_mean_f <- round(
+  as.double(
+    titanic_original %>% 
+      filter(!is.na(age), sex == 'female') %>% 
+      summarise(mean(age))
+    )
+  )
+
+fare_mean <- round(
+  as.double(
+    titanic_original %>% 
+      filter(!is.na(fare)) %>% 
+      summarise(mean(fare))
+    )
+  )
+```
+
+We'll adjust the ages that are NA to be replaced by the average age of an individual's respective sex.
+Additionally, we'll adjust the fares as well.
+We can use a simple nested IFELSE statement to accomplish this task with MUTATE
+
+```{r}
+titanic_df <- titanic_original %>% 
+  mutate(age = 
+           ifelse((is.na(age) & sex == 'male'),
+                  age_mean_m,
+                  ifelse((is.na(age) & sex == 'female'),
+                         age_mean_f,
+                         age)
+                  ),
+         fare = 
+           ifelse(is.na(fare), fare_mean, fare)
+         )
+```
+
+For sanity sake, we'll make sure this did what we had hoped.
+Because the unmodified titanic DF will still have the missing values, we can use a logical statement to find those and then make sure they are replaced with the correct values in our new DF.
+
+```{r, echo = FALSE}
+paste("Mean age (male):", age_mean_m)
+
+paste("Mean age of originally missing values (male):", 
+      mean(titanic_df$age[
+        is.na(titanic_original$age) &
+          titanic_original$sex == 'male']
+      )
+)
+
+paste("Mean age (female):", age_mean_f)
+
+paste("Mean age of originally missing values (female):", 
+      mean(titanic_df$age[
+        is.na(titanic_original$age) & 
+          titanic_original$sex == 'female']
+      )
+)
+
+## We'll do a little clean-up now that we've verified the columns we mutated from the original
+rm(titanic_original)
+```
+
+The result comes out as expected, so we're good to move on.
+
+### Boats and Cabins
+
+The boats column has quite a few empty values in it (instead of `NA`). Another solution (perhaps simpler) would have been to add an option on the import to change blank values to `NA`. 
+
+```{r, eval = FALSE}
+read.csv('titanic_original.csv', stringsAsFactors = F, na.strings = c("","NA"))
+```
+
+Alas, we didn't do that, so we'll replace them now.
+
+```{r}
+titanic_df <- titanic_df %>% 
+  mutate(boat = ifelse(boat == "", NA, boat))
+```
+
+Lastly, we take a look at the cabin column. The cabin value may be blank if a passenger was not able to secure their own room, or possibly their ticket could not verify which room they were assigned to because the person did not survive. This doesn't seem to always be the case, as there are some blank cabin entries who survived, so this may require a deeper look.
+
+A quick way to verify the overall trend would be to compare those with an empty cabin number with the `survived` column and see if there is any correlation between the two.
+
+This may be useful in the end, so we'll add a binary column to indicate whether or not they had a cabin, to make this comparison easier.
+
+```{r}
+titanic_df <- titanic_df %>%
+  mutate(has_cabin_number = ifelse(cabin == "", 0, 1))
+```
+
+### Wrapping Up
+
+The final portion of this is saving it to a CSV that has been cleaned up. While we won't perform the analysis on it here, it should be ready to go and easy enough to delve into more exploration of the data at a later date.
+
+```{r}
+# I didn't like how it added the row number to the CSV file, so I turned those off
+write.csv(x = titanic_df, "titanic_clean.csv", row.names = FALSE)
+```
