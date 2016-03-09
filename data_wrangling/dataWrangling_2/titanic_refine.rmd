@@ -14,7 +14,7 @@ titanic_original <- tbl_df(read.csv('titanic_original.csv', stringsAsFactors = F
 ```
 ### Setup and Initial Look
 
-The output to the .rmd file can be viewed as an HTML on my [github pages](https://elshambler.github.io/titanic_refine.rmd).
+The output to the .rmd file can be viewed as an HTML on my [github pages](https://elshambler.github.io/titanic_refine.html).
 
 I first took the data from it's source and opened it as an excel document and saved as CSV. That way, the formatting was correct and quite simple to get to a good starting point.
 For some reason, the import added a line at the end that was completely blank... so we'll just remove that.

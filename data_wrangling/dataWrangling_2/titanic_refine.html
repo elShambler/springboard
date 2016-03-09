@@ -69,7 +69,7 @@ img {
 
 <div id="setup-and-initial-look" class="section level3">
 <h3>Setup and Initial Look</h3>
-<p>The output to the .rmd file can be viewed as an HTML on my <a href="https://elshambler.github.io/titanic_refine.rmd">github pages</a>.</p>
+<p>The output to the .rmd file can be viewed as an HTML on my <a href="https://elshambler.github.io/titanic_refine.html">github pages</a>.</p>
 <p>I first took the data from it’s source and opened it as an excel document and saved as CSV. That way, the formatting was correct and quite simple to get to a good starting point. For some reason, the import added a line at the end that was completely blank… so we’ll just remove that.</p>
 <pre class="r"><code>titanic_original &lt;- tbl_df(read.csv('titanic_original.csv', stringsAsFactors = F))
 titanic_original &lt;- titanic_original[-nrow(titanic_original),]</code></pre>
