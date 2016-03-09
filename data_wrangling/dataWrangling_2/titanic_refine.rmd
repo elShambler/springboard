@@ -98,7 +98,7 @@ Because the unmodified titanic DF will still have the missing values, we can use
 ```{r, echo = FALSE}
 paste("Mean age (male):", age_mean_m)
 
-paste("Mean age of originally missing values (male):", 
+paste("Mean age of replaced missing values (male):", 
       mean(titanic_df$age[
         is.na(titanic_original$age) &
           titanic_original$sex == 'male']
@@ -107,7 +107,7 @@ paste("Mean age of originally missing values (male):",
 
 paste("Mean age (female):", age_mean_f)
 
-paste("Mean age of originally missing values (female):", 
+paste("Mean age of replaced missing values (female):", 
       mean(titanic_df$age[
         is.na(titanic_original$age) & 
           titanic_original$sex == 'female']
