@@ -1,0 +1,292 @@
+---
+title: "Exploring Diamonds"
+author: "Tomás"
+date: "March 22, 2016"
+output: html_document
+---
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(dplyr)
+library(scales)
+library(extrafont)
+library(extrafontdb)
+df <- tbl_df(diamonds)
+```
+## Diamonds Data Set - Exploring the Data
+
+#### Skipping Ahead
+
+If you'd like to see certain sections - click on the link below.
+
+[Springboard Assignment Plot](#assignment)
+
+***
+### Overview of the Dataset
+
+We'll first explore the dataset of diamonds to see what we are dealing with. A few starters when first dealing with a df is to load it from the ggplot library `df <- tbl_df(diamonds)`
+
+To get a better understanding, we'll run a few basic commands: `str(), head(), summary() (or dplyr::glimpse())`
+
+```{r Basics of the Data}
+names(df)
+str(df)
+head(df)
+summary(df)
+```
+
+Let's answer some basic questions.
+
+- Number of observations: `r nrow(df)`
+- Number of variables: `r ncol(df)`
+- Columns formatted as an ordered factor: (`r names(df)[grep('factor', lapply(df, class))]`)
+- Best color for a diamond (aka highest factor of color): `r levels(df$color)[1]`
+
+***
+### Exploring the Price
+Next up, we'll have a look at the different prices of the diamonds and what affects that.
+
+First, let's see what the full distribution of all the prices of all diamonds looks like.
+
+```{r Price Histogram, echo = F, warning=F}
+p <- ggplot(data = df, aes(x = price))
+p + geom_histogram(binwidth = 350, colour = "#abcdef") +
+  scale_x_continuous(breaks = seq(0, 20000, 1000), limits = c(0, 20000))
+
+rm(p)
+```
+
+What does this tell us about the data? It seems to be right-skewed data, with the center around 1000
+
+A better plot to evaluate this better would be a boxplot. Let's do it!
+
+```{r Price Boxplot, echo = F, warning = F}
+p <- ggplot(data = df, aes(x = 1, y = price))
+p + geom_boxplot() + coord_flip()
+```
+
+Looking at the plot, though, it appears we have an extremely long tail. Let's try and cut that down to see a little better of what's going on.
+```{r Boxplot Revisited, echo = F, warning=F}
+# Looks  a little better
+p + geom_boxplot(fill = "#3cc3bd") + coord_flip() +
+  ylim(c(0, 7000))
+
+rm(p)
+```
+
+***
+### Breaking Down the Price
+If we want to get a closer look into the different costs, let's get a feel for the edges of our data.
+
+Recall, there are `r nrow(df)` observations in the data.
+
+- Number of diamonds less than 500: `r sum(df$price <500)`
+- Number of diamonds less than 250: `r sum(df$price <250)`
+- Number of diamonds $15,000 or more: `r sum(df$price >= 15000)`
+
+***
+### Cheaper Diamonds
+
+The histogram earlier showed a large peak around $2000. I'd like to take a closer look at it and understand a bit more of the data surrounding the peaks in the price.
+
+```{r Cheaper Diamonds, echo = F, warning = F}
+p <- ggplot(data = df, aes(x = price))
+p + geom_histogram(binwidth = 50, color = "#464c5d", fill = "#3cc3bd") +
+  scale_x_continuous(breaks = seq(0, 4000, 250), limits = c(350, 2000))
+```
+
+Once the histogram has the x and y-axis cropped, it is a little easier to dissect and understand what we're looking at.
+
+First, we can easily tell there's no diamond that costs $1500... odd. Perhaps it's an even price that companies avoid?
+
+Second, the range of prices most common are between $400 and $1200, at least that's what it looks like when viewing the graph.
+
+Lastly, the highest frequency of price of a diamond is between $700 and $750.
+
+It makes sense that some factor is driving this price up. First, we'll explore the cut and how the price changes.
+
+***
+### Price Cut by Histograms
+The different colors are: `r paste(levels(df$cut), collapse = ", ")` (in order of worst to best)
+Let's plot it
+
+```{r Price Cut by Histogram, warning=F}
+p + geom_histogram(binwidth = 250, fill = "#6e9396") +
+  scale_x_continuous(breaks = seq(0, 20000, 5000), limits = c(0, 20000)) +
+  facet_wrap(~cut, ncol =1) +
+  ylab("Number of Diamonds At Price")
+
+```
+
+These graphs quickly show how most of the diamonds have either a premium or ideal cut have the highest frequency of all diamonds. The $1500 blank spot also sticks out.
+
+Let's break down some of the prices by category.
+
+Price per Cut Information (Maximum, Minimum, and Median):
+```{r Meaningful Info per Cut, echo = F}
+df %>% group_by(cut) %>% summarise("Max Price" = max(price), "Min Price" = min(price), "Median Price" = median(price), "Mean Price" = mean(price))
+
+```
+What's interesting about the various cuts is they all seem to have the same median and mean. But when we looked at the plot above, the shape is definitely skewed towards the Premium and Ideal cuts, which seem to be the most popular category.
+
+However, each cut seems to have a similar distribution of prices. Let's see if we can't adjust the scales to give us a better graph.
+
+```{r Scales and Multiple Histograms, warning = F}
+p + geom_histogram(binwidth = 250, fill = "#6e9396") +
+  scale_x_continuous(breaks = seq(0, 20000, 5000), limits = c(0, 20000)) +
+  facet_wrap(~cut, ncol = 1, scales = "free_y") +
+  ylab("Number of Diamonds At Price")
+
+```
+
+Looks better. Let's continue our exploration.
+
+***
+### Price Per Carat by Cut
+
+It would be a mistake to only look at one variable as a driving factor for the price. If we adjust the data to look at how price varies per carat and by cut, we may get a better understanding of the diamond market.
+
+```{r Price per carat by Cut, echo = F}
+p <- ggplot(data = df, aes(x = price/carat))
+
+p + geom_histogram(bins = 50, 
+                   fill = "#f9bc2a", 
+                   colour = "#e4ea92") +
+  facet_grid(cut~., scales = "free") +
+  labs(x = "Price per Carat", y='Number of Diamonds at [price/carat]') +
+  scale_x_continuous(breaks = trans_breaks('log10', function(x) 10^x),
+                     labels = trans_format('log10', function(x) round(10^x)),
+                     trans = 'log10')
+
+rm(p)
+```
+
+Breaking out the distribution by the cut gives us an idea how both variables affect the overall price. We can see that overall, you'll pay around $2500 per carat if you're going for the most popular cuts (Premium and Ideal).
+
+"Very Good" has an interesting distribution - almost bimodal (2nd peak being around $4500/carat).
+
+***
+### Price Box Plots
+
+Let's try looking at the price as it varies by clarity. We'll use a boxplot to investigate how this one works.
+
+```{r Boxplots by Clarity, echo = F}
+p <- ggplot(data = df, aes(x = clarity, y = price))
+p + geom_boxplot(outlier.colour = "#011f4b", fill = "#b3cde0", color = "#6497b1") +
+  coord_trans(y = "log10")
+
+
+## Summary of Price by Clarity
+### note: clarity of 'I1' is the worst, and 'IF' is best
+df %>% group_by(clarity) %>% 
+  summarise("Mean" = round(mean(price)),
+            "Median" = median(price),
+            "Max" = max(price),
+            "Count" = n()) %>% 
+  arrange(desc(clarity))
+
+rm(p)
+```
+
+What this might be telling us is even though IF has the best clarity, it also has one of the lowest median prices.
+The prices for VVSI and IF even keep their 3rd quartile prices below $2500. The bulk number of the diamonds do not fall in this category either, so this may indicate an area where you can get the best quality at a "low" price?
+The low count on these diamonds, however, may hint towards them being very rare and there is not much of a market for them? Or possibly the other variables influence the price much more - so while the better the clarity, the higher the price, the other variables affect the price at a much greater scale? We'll have to take a closer look.
+
+VS2, and SI1 make up the bulk of the diamonds and may indicate what you should expect from a diamond with less-than flawless diamonds.
+
+### A Closer Look
+
+Let's go through some of the different factors to see we can understand why an IF and VVS1 have the lowest median costs.
+
+```{r A Closer Look, echo = F, warning = F}
+p <- ggplot(data = df, aes(x = clarity, y = price))
+p1 <- p + geom_boxplot(outlier.colour = "#009688",
+                 fill = "#66c0b7", 
+                 color = "#99d5cf") + 
+  coord_trans(y = "log10") +
+  facet_grid(color ~ ., scales = "free_y") +
+  ggtitle("Price Broken Out by Clarity - Grouped by Color") +
+  theme(plot.title = element_text(family = "Tahoma", size = 16))
+
+p1
+
+## I'd like to see different colors than the stock, so let's create a good palette
+cbPalette <- c("#edc951", "#eb6841", "#0000ff", "#cc2a36", "#8ec127", "#4f372d", "#00a0b0", "#2c003a")
+p2 <- ggplot(data = df, aes(log10(price), fill = clarity)) + geom_histogram(bins = 75) + scale_fill_manual(values = cbPalette)
+p2 + facet_grid(color~., scales = "free_y")
+```
+
+By breaking out the cost and frequency of the clarity of the diamonds by color, it paints a litte bit better picture why the median price for an IF diamond is so low - a majority of the diamonds have a color of G. Looking at the box plot, diamonds of color G have the highest median as you're paying top dollar for an IF D rock.
+
+Let's also look at the previous plot to see how carat plays a role. 
+
+```{r A Closer Look at Carat, echo = F, warning = F}
+p <- ggplot(data = df, aes(x = clarity, y = price/carat))
+p + geom_boxplot(outlier.colour = "#011f4b", fill = "#b3cde0", color = "#6497b1") +
+  coord_trans(y = "log10") +
+  facet_grid(color~.)
+```
+
+Looking at the graph above, the pricing starts to make more sense with regard to the clarity.
+
+As the diamonds get closer to the best of clarity and color, the price/carat increases - as would be expected. The closer to a "D" flawless ("IF") diamond you get, the more money you'll have to fork over. This is only a preliminary look though, as there are still other variables to explore as how they affect price, but will be covered at a later time.
+
+
+***
+### Interquartile Range - IQR
+To understand a little more of how the diamonds price varies between colors, we'll have a closer look at their distributions.
+
+IQR - [Color] | Price
+--------------|-------
+1st Quartile [D] | `r quantile(subset(df, color == 'D')$price, prob = 0.25)`
+3rd Quartile [D] | `r quantile(subset(df, color == 'D')$price, prob = 0.75)`
+|
+1st Quartile [J] | `r quantile(subset(df, color == 'J')$price, prob = 0.25)`
+3rd Quartile [J] | `r quantile(subset(df, color == 'J')$price, prob = 0.75)`
+|
+IQR [D] | `r IQR(subset(df, color == 'D')$price)`
+IQR [J] | `r IQR(subset(df, color == 'J')$price)`
+
+***
+<div id = "assignment">
+### Price per Carat by Color
+</div>
+
+Above, we looked at the price per carat by cut. What about another part of the "4 C's" - color?
+
+```{r Price per Carat by Color, echo = F}
+p <- ggplot(data = df, aes(x = color, y = price/carat))
+p + geom_boxplot(outlier.colour = "#800909", fill = "#fdcf58", color = "#757676") +
+  coord_flip()
+
+rm(p)
+
+```
+
+We've been looking at some of the points on a scale of $/carat, but what does the carat weight of the ring actually tell us?
+Which are the most common weights?
+
+We'll set a threshold value of 2000. This means, if there are more than 2000 diamonds of one carat size, we should know about it.
+
+```{r Carat Frequency, warning=F, echo=F}
+p <- ggplot(data = df, aes(x = carat))
+p + geom_freqpoly(binwidth = 0.01, color = "#6fcb9f") +
+  scale_x_continuous(breaks = seq(0, 5, 0.2)) +
+  geom_hline(aes(yintercept = 2000),
+             linetype = "dashed", size = 0.5)
+
+t <- df %>% group_by(carat) %>% summarise("count" = n()) %>% filter(count > 2000)
+
+t
+```
+
+So there you have it - the most popular diamond weight is 0.30, 0.31, and 1.01.
+
+***
+### Final Thoughts and Future Work
+
+The primary focus of this exploration was to better understand how multiple variables can affect the outcome - price. We primarily focused on the "4 C's" of the diamond, but there were still additional variables to explore.
+
+If we were to continue analyzing the data here, by determining the relationship between *ALL* the variables, we should be able to put together a full model on expected price based on the different variables. This could be a handy tool for any persons out there shopping for diamond rings and hoping to get a good deal, or at least not ripped off.
+
+
+
