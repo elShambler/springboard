@@ -1,0 +1,288 @@
+---
+title: "Diamonds Part Duex"
+author: "Tomás"
+date: "April 11, 2016"
+output: html_document
+---
+
+```{r SETUP, echo=FALSE, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(dplyr)
+library(scales)
+library(extrafont)
+library(extrafontdb)
+library(gridExtra)
+df <- tbl_df(diamonds)
+```
+## Introduction
+
+We've gone over a preliminar look at the diamonds dataset, but now we'll be exploring the variables more in depth
+and at more than one at a time.
+
+While we did have multiple variables shown on the same graph, we never really used any statistics to determine how much
+each variable affects the price and even if they affect each other instead of the final price.
+
+## Initial Looks and Refresher
+
+We already had a good look at the data. Some of the variables we didn't look at were the x, y, and z.
+
+A quick summary of the variables.
+
+Variable | Detail
+---------|------------------------------------------------------------------------------
+price    | price in USD (326-18,823)
+carat    | weight (0.2 - 5.01)
+cut      | quality of cut (Fair, Good, Very Good, Premium, Ideal)
+color    | J (worst) to D (best)
+clarity  | how clear diamond is (I1 (worst), SI1, SI2, VS1, VS2, VVS1, VVS2, IF (best))
+x        | length in mm (0 - 10.74)
+y        | width in mm (0 - 58.9)
+z        | depth in mm (0 - 31.8)
+depth    | total depth percentage = z / mean(x, y) (43 - 79)
+table    | width of top of diamond relative to widest point (43 - 95)
+
+
+### X,Y,Z and Everything on the Table
+
+Let's put the x, y, and z variables to a test of their correlation to price. Recall - a pearson corr factor of 0 means there is 
+no linear relationship between the two, whereas a value of 1 means there is a strong linear correlation.
+
+Correlation of :
+
+- `x` and `price`: `r round(cor(df$x, df$price),2)`
+- `y` and `price`: `r round(cor(df$y, df$price),2)`
+- `z` and `price`: `r round(cor(df$z, df$price),2)`
+
+```{r price vs depth, warning = F}
+
+x_range <- range(df$depth)
+x_lab <- seq(x_range[1], x_range[2], 2)
+ggplot(data = df, aes(x = depth, y = price)) + 
+	geom_point(alpha = 1/50) +
+	scale_x_continuous(breaks = x_lab,
+					   labels = x_lab)
+```
+
+Looking at the graph above, we can get a better understanding of the depth of diamonds, and what the price looks like.
+
+All diamonds seem to be confined to a depth of 59 and 64.
+But would we consider this a correlation? What does Pearson say?
+
+Pearson correlation coefficient: `r round(cor(x = df$depth, y = df$price, method = "pearson"),2)`
+Survey says... Not any correlation. A correlation coefficient close to 0 (within one hundredth) indicates that there is weak (if any) correlation.
+We probably could've concluded that from the graph, but good to see a number that says otherwise too.
+
+### Carrots
+
+What about the carat of the diamond? We looked at price/carat as a single variable last time, along with a historgram of the carats. 
+
+Recall the histogram:
+
+```{r Carat Density}
+p <- ggplot(data = df, aes(x = carat))
+p + geom_freqpoly(binwidth = 0.01, color = "#6fcb9f") +
+  scale_x_continuous(breaks = seq(0, 5, 0.2)) +
+  geom_hline(aes(yintercept = 2000),
+             linetype = "dashed", size = 0.5)
+```
+
+This time, let's see how price and carat trend. To see the bulk of the value, we'll exclude the top 1%.
+
+```{r Price vs carat}
+## Find 99th percentile using quantile and omit the top 1%
+ggplot(subset(df, price <= quantile(price, 0.99)), aes(carat, price)) + 
+  geom_point(alpha = 1/5)
+```
+
+### V = nRT/P for Diamonds
+
+Since x,y, and z make up the variables for width, height, and depth, it follows that we should be able to estimate a volume from those values. It's a very rough estimate, but should give us some insight into those 3 factors as a whole, but not which one has more influence.
+
+```{r Price and Volume}
+## Making a new variable with mutate
+
+df <- df %>% mutate(volume = x*y*z)
+
+## And plotting with gg
+
+ggplot(df, aes(x = volume, y = price)) +
+  geom_point()
+```
+
+Look at that. The price seems to trend nicely with the volume variable. There are some obvious outliers that are throwing the scale off, so instead of just throwing them out, we should probably look at them and figure out why they don't fit the trend.
+
+My initial thought is if the volume is so outrageously high, why doesn't the price follow that as well? A high volume would indicate a large diamond, which seems to imply a large price. Perhaps someone moved a decimal place over to where it shouldn't have been? I suppose that's what EDA is all about.
+
+#### Volume Observations and Pariahs
+
+Along with the large volumes of some of the diamonds, there are also diamonds with a volume of 0... aka non-existent. That doesn't happen, and those should definitely be excluded.
+
+Number of diamonds with 0 volume: `r sum(df$volume == 0)`
+
+Outliers visible from the graph:
+
+```{r echo=FALSE}
+df_rect <- data.frame(x = c(800, 3900), y = c(1800, 12800))
+
+ggplot() +
+  geom_point(data = df, aes(x = volume, y = price)) +
+  geom_rect(data = df_rect, 
+            aes(xmin = min(x), 
+                xmax = max(x), 
+                ymin = min(y), 
+                ymax = max(y)),
+            size = 1.2,
+            color = 'red',
+            fill = NA)
+
+```
+
+And a more textual look at those points.
+
+```{r Pariahs}
+df %>% filter(volume > 800, price < 12500)
+
+dx <- ggplot(df, aes(x)) + geom_histogram(binwidth = 1) + coord_trans(y = "sqrt")
+dy <- ggplot(df, aes(y)) + geom_histogram(binwidth = 1) + coord_trans(y = "sqrt")
+dz <- ggplot(df, aes(z)) + geom_histogram(binwidth = 1) + coord_trans(y = "sqrt")
+
+grid.arrange(dx, dy, dz, ncol = 1)
+
+```
+
+Just for fun, we'll stack the histogram charts; however, I did not find an easy solution to do this, so ended up having to pull out the values from the original dataframe and putting them into a new one as a single "volume" variable.
+
+```{r Volume Distribution}
+# Each of the variables for volume with its variable ID
+x_val <- df %>% select(x) %>% mutate(var = "x")
+y_val <- df %>% select(y) %>% mutate(var = "y")
+z_val <- df %>% select(z) %>% mutate(var = "z")
+
+# Renaming so we can combine them properly
+names(x_val) <- names(y_val) <- names(z_val) <- c("val", "var")
+
+# And now combine to one data frame
+vol_full <- rbind.data.frame(x_val, y_val, z_val, stringsAsFactors = F)
+
+# Tidy up our workspace first
+rm(x_val, y_val, z_val)
+
+# Now we plot
+cbPalette <- c("#1b85b8", "#5a5255", "#c3cb71")
+ggplot(vol_full, aes(x = val, fill = var)) + 
+  geom_histogram(binwidth = 0.5, alpha = 0.6) + 
+  coord_trans(y = "sqrt") +
+  scale_fill_manual(values = cbPalette)
+```
+
+That was not totally necessary, but it helps to understand and show the different outliers. I think the other graph did a better job of showing the varying distributions between the volume dimensions. Interesting, nonetheless to see the different distributions on the same scale.
+
+### Impact of Volume
+
+If we are to exclude the diamonds with a volume of 0, we can get a better idea for the correlation to price.
+
+We are also going to exclude any diamond with a volume greater than 800, similar to what was shown above for the outliers.
+
+```{r Calculating Price Vol Cor, echo=FALSE, message=FALSE}
+VtP <- with(subset(df,
+                   volume > 0 & volume < 800),
+            cor(volume, price, method = 'pearson'))
+VtP <- round(VtP, 2)
+```
+
+Based on that, the correlation between price and volume is now `r VtP`.
+
+Plotting this should give us a better idea of what that correlation factor is, as being that close to 1, there is a reason to explore this further.
+
+```{r Subset of Price to Volume}
+df.vtp <- subset(df, volume > 0 & volume < 800)
+
+ggplot(df.vtp, aes(volume, price)) +
+  geom_point(alpha = 1/5) +
+  geom_smooth(method = 'lm') +
+  scale_y_continuous(limits = c(0, 20000))
+```
+
+Adding a smoothed linear model to the data gives us a good visual representation of the trend; however, in looking at the graph, it seems that a linear model is not the best method. While the linear model does fit reasonably well, especially with the 0.92 factor, a non-linear may get us closer for all ranges of volume - perhaps a parabolic fit?
+
+## Mean Price by Clarity
+
+Next we'll delve into looking at the mean price by clarity. To begin we'll create a new dataframe that is a summary of the diamonds data set, but is focusing on clarity.
+
+```{r Diamonds by Clarity}
+diamondsByClarity <- df %>% 
+  group_by(clarity) %>% 
+  summarise(mean_price = mean(price),
+            median_price = median(price),
+            min_price = min(price),
+            max_price = max(price),
+            n = n())
+```
+
+We'll also create a data frame that goes through the same summaries, but for color instead of clarity.
+
+```{r Diamonds by Color}
+diamondsByColor <- df %>% 
+  group_by(color) %>% 
+  summarise(mean_price = mean(price),
+            median_price = median(price),
+            min_price = min(price),
+            max_price = max(price),
+            n = n())
+```
+
+We can compare the two variables by plotting color and clarity in tandem to get an idea of how they each effect price.
+
+```{r Mean Price}
+diamonds_mp_by_clarity <- diamondsByClarity %>% select(clarity, mean_price)
+diamonds_mp_by_color <- diamondsByColor %>% select(color, mean_price) %>% arrange(desc(color))
+
+# Rearrange order for color to be lowest to greatest
+diamonds_mp_by_color$color <- with(diamonds_mp_by_color, factor(color, levels = rev(levels(color))))
+
+p1 <- ggplot(diamonds_mp_by_clarity, aes(x = clarity, y = mean_price)) +
+  geom_bar(stat = 'identity', fill = "#5e3c58") +
+  labs(y = "Mean Price") +
+  ggtitle("Mean Price by Clarity") +
+  scale_y_continuous(breaks = seq(0, 5000, 1000), limits = c(0, 5500))
+
+p2 <- ggplot(diamonds_mp_by_color, aes(x = color, y = mean_price)) +
+  geom_bar(stat = 'identity', fill = "#fb2e01") +
+  labs(y = "") +
+  ggtitle("Mean Price by Color") +
+  scale_y_continuous(breaks = seq(0, 5000, 1000), limits = c(0, 5500))
+
+grid.arrange(p1, p2, ncol = 2)
+```
+
+By arranging these side by side and ordered from least (left) to greatest (right) of clarity and color, the mean price continues to trend lower. While the clarity field seems to be a gradual trend towards cheaper mean price, the color of the diamond has greater price drops between colors.
+
+This may indicate that color is more of a driving factor as it seems to vary more over price.
+
+Let's add the cut into the mix and see how that looks comparatively.
+
+```{r Cut Mean Price}
+diamondsByCut <- df %>% 
+  group_by(cut) %>% 
+  summarise(mean_price = mean(price),
+            median_price = median(price),
+            min_price = min(price),
+            max_price = max(price),
+            n = n())
+
+p3 <- ggplot(diamondsByCut, aes(x = cut, y = mean_price)) +
+  geom_bar(stat = 'identity', fill = "#6fcb9f") +
+  labs(y = "") +
+  ggtitle("Mean Price by Cut") +
+  scale_y_continuous(breaks = seq(0, 5000, 1000), limits = c(0, 5500)) +
+  theme(axis.text.x = element_text(size = 6))
+
+grid.arrange(p1, p2, p3, ncol = 3)
+```
+
+## Conlcusion
+
+This is the end of the segment that udacity asked for analysis. There's definitely more work to be done though as the mean price begs a deeper dive into how the cut, clarity, and color affect the price, but also why the decrease as the diamond's respective quality increases.
+
+One of the bigger pieces to take away from this piece is how greatly, and well, price is affected by volume. Putting together
+a regression model and put some values to all the variables should be the next step in this process.
