@@ -14,7 +14,7 @@ df <- tbl_df(diamonds)
 
 ## Introduction
 
-This last analysis will be going in depth into a analysis model to try and understand the features for pricing and allow us to come up with a model.
+This last analysis will be going in depth into a analysis model to try and understand the features for pricing and allow us to come up with a model. It's fun.
 
 ### Histograms by Facet and Color
 
