@@ -1,0 +1,27 @@
+---
+title: "Diamonds Part III"
+author: "Tomas Castillo"
+date: "April 21, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+df <- tbl_df(diamonds)
+```
+
+## Introduction
+
+This last analysis will be going in depth into a analysis model to try and understand the features for pricing and allow us to come up with a model.
+
+### Histograms by Facet and Color
+
+```{r Histogram byFC, warning = FALSE}
+ggplot(df, aes(price)) +
+  geom_histogram(aes(fill = cut), binwidth = 100) +
+  facet_wrap(~color, ncol = 3) +
+  scale_fill_brewer(type = 'qual') +
+  coord_trans(x = 'log10')
+```
