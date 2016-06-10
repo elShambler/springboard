@@ -1,0 +1,451 @@
+---
+title: "CHIS Data"
+author: "Tomas Castillo"
+date: "June 9, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("C:/Users/castillo/OneDrive/School/Springboard/FoundationsDS/eda/DataCamp/CHIS/")
+library(ggplot2)
+library(ggthemes)
+library(haven)
+library(dplyr)
+library(reshape2)
+```
+
+## Overview of Project
+
+The last section on DataCamp had us explore some data from a 2009 health survey conducted by UCLA.
+This data is publicly available at [UCLA's website](#http://healthpolicy.ucla.edu/Pages/home.aspx) after a
+few steps.
+
+The goal of the assignment is to create a mosaic plot - a tile bar plot that shows how two categorical
+variables influence one another using color or heatmaps. It's a very good excercise into how to put many skills
+together to create a nice visual plot.
+
+The outcome also produces a custom function that takes a dataset and two categorical variables as input - nifty.
+
+### Preparing the Data
+
+Once obtaining and downloading the data, we have to import it. The only downside is the data comes in three
+different formats -- 'SAS', 'SPSS', and 'Stat'. No big deal though as R has the flexibility to read those
+formats with the right package.
+
+I downloaded the data in 'SAS' format, and I picked out the _*.sas7bdat_ file. I used a package by Hadley
+to read it and import the file in -- `haven::read_sas()`
+
+```{r pulling the data, message = FALSE}
+chis.df <- read_sas("data/adult.sas7bdat")
+```
+
+The tutorial in datacamp only used 10 variables for analysis, so the dataset will be filtered to these
+variables:
+
+Variable    | Description
+------------|----------------------------------------
+RBMI        | BMI Category Description
+BMI_P       | BMI Value
+RACEHPR2    | Race
+SRSEX       | Sex
+SRAGE_P     | Age
+MARIT2      | Marital Status
+AB1         | General Health Condition
+ASTCUR      | Current Asthma Status
+AB51        | Type I or Type II Diabetes
+POVLL       | Poverty Level
+
+Not a bad idea since the original dataset has 47,614 observations, and 536 variables... Now it has 10 variables.
+
+Datacamp also filters out the data to retain the 4 largest races within the dataset. This required a bit of
+reading into the data dictionary provided, but the definition of the variable `RACEHPR2` are such:
+
+Value | UCLA CHPR Definition
+------|--------------------------------------------
+1     | Latino
+2     | Pacific Islander
+3     | American Indian/Alaskan Native
+4     | Asian
+5     | African American
+6     | White
+7     | Other Single/Multiple Race
+
+```{r filtering data}
+fVar <- c("RBMI", "BMI_P", "RACEHPR2",
+          "SRSEX", "SRAGE_P", "MARIT2",
+          "AB1", "ASTCUR", "AB51", "POVLL")
+
+chis.df.w <- chis.df %>% select(one_of(fVar)) %>% filter(RACEHPR2 %in% c(1,4,5,6))
+rm(chis.df)
+```
+
+### Basic Exploration
+
+As the early pioneers did, so too must we explore into the unknown. Doing a few histograms on the areas of focus
+helps to understand what we're dealing with.
+
+We'll focus in on the 'BMI'(`BMI_P`) and 'age' (`SRAGE_P`) variables for now.
+
+```{r basic exploration, warning = F}
+# Age histogram
+ggplot(chis.df.w, aes(x = SRAGE_P)) +
+    geom_histogram()
+
+# BMI histogram
+ggplot(chis.df.w, aes(x = BMI_P)) +
+    geom_histogram()
+
+# Age colored by BMI, default binwidth
+ggplot(chis.df.w, aes(x = SRAGE_P, fill = factor(RBMI))) +
+    geom_histogram(binwidth = 1, position = "fill")
+```
+
+### Some Housecleaning
+
+It's important to do a bit of cleanup on the data to make it easier to work with.
+
+Notice how there's a large spike in 85 (at the end)? That's probably because anyone aged 85 or older
+got the ripe age of 85. Not very useful, so it gets removed.
+
+Also, while it's likely these people exist, those with abnormally low and high BMIs will be removed as.
+
+Two of the categorical variables are just numbers right now - we can re-label them to be more
+meaningful to us as well. `RACEHPR2` and `RBMI` will both be re-labelled as factors.
+
+If you're curious on the standards for BMI - you can [read more about it here](https://en.wikipedia.org/wiki/Body_mass_index).
+
+```{r housecleaning}
+# Remove individual aboves 84
+chis.df.w <- chis.df.w[chis.df.w$SRAGE_P <= 84,] 
+
+# Remove individuals with a BMI below 16 and above or equal to 52
+chis.df.w <- chis.df.w[chis.df.w$BMI_P >= 16 & chis.df.w$BMI_P < 52,]
+
+# Relabel the race variable:
+chis.df.w$RACEHPR2 <- factor(chis.df.w$RACEHPR2,
+                         labels = c("Latino", "Asian",
+                                    "African American", "White"))
+
+# Relabel the BMI categories variable:
+chis.df.w$RBMI <- factor(chis.df.w$RBMI, labels = c("Under-weight",
+                                            "Normal-weight",
+                                            "Over-weight",
+                                            "Obese"))
+```
+
+We'll do a few more plots on BMI vs Age to grasp the distribution a little better and potentially how age
+may influence BMI.
+
+First, we'll make the charts a little more appealing.
+
+```{r pretty}
+# Color scale
+BMI_fill <- scale_fill_brewer("BMI Category", palette = "Reds")
+
+# Theme to fix category display in faceted plot
+fix_strips <- theme(strip.text.y = element_text(angle = 0, hjust = 0, vjust = 0.1, size = 14),
+                    strip.background = element_blank(), 
+                    legend.position = "none")
+
+ggplot(chis.df.w, aes (x = SRAGE_P, fill= factor(RBMI))) + 
+  geom_histogram(binwidth = 1) +
+  fix_strips +
+  facet_grid(RBMI ~ .) +
+  theme_solarized_2(light=FALSE) +
+  BMI_fill
+```
+
+### Density Explorations
+
+Density within a distribution shows how the frequency of one variable changes - either within a category or
+within its own variable. For example - we can understand how the age is distributed proportionally across
+the an entire BMI group, or we can see how it changes across each age group and BMI group.
+
+A few density plots to show a though progression.
+
+First plot takes the base plot (not faceted), and takes shows density instead of count.
+
+```{r density 1}
+ggplot(chis.df.w, aes (x = SRAGE_P, fill= factor(RBMI))) + 
+  geom_histogram(aes(y = ..density..), binwidth = 1) +
+  theme_solarized_2(light=FALSE) +
+  BMI_fill
+```
+
+It's a little wonky, but this shows age proportion across an entire BMI category. To help understand, imagine
+there are 15,000 "Normal-weight" individuals. The above plot will say that there are 100 people aged 30, so that bin value should be `r 30/15000`. This is a fine representation, but it's not useful when stacked on the
+other BMI categories.
+
+Plot 2 breaks it out.
+
+```{r density 2}
+ggplot(chis.df.w, aes (x = SRAGE_P, fill= factor(RBMI))) + 
+  geom_histogram(aes(y = ..density..), binwidth = 1) +
+  BMI_fill +
+  facet_grid(RBMI ~ .) +
+  theme_solarized_2(light=FALSE)
+```
+
+We can do a fill plot on the above, but that wouldn't be an accurate representation since the density calculation
+is not done per age, rather by the BMI category. To get around this, we'll ensure the method of
+calculation for the histogram is accurate.
+
+```{r density 3}
+ggplot(chis.df.w, aes (x = SRAGE_P, fill= factor(RBMI))) + 
+  geom_histogram(aes(y = ..count../sum(..count..)),
+                     binwidth = 1, 
+                     position = "fill") +
+  BMI_fill +
+  theme_solarized_2(light=FALSE)
+```
+
+The above plot is exactly what we want! There's one issue - if we want to see each of those categories broken
+out to understand the age distribution within each category a little closer, we won't get what we want.
+
+```{r density fail}
+ggplot(chis.df.w, aes (x = SRAGE_P, fill= factor(RBMI))) + 
+  geom_histogram(aes(y = ..count../sum(..count..)), binwidth = 1, position = "fill") +
+  BMI_fill +
+  facet_grid(RBMI ~ .) +
+  theme_solarized_2(light = FALSE)
+```
+
+### Manual Density Calculations
+
+This brings us to the next point - we can use R's power to calculate the necessary statistics outside of
+the plot, and then plot the results.
+
+First, we'll isolate the two variables we want to explore deeper -- age and BMI.
+
+```{r manual table}
+DF <- table(chis.df.w$RBMI, chis.df.w$SRAGE_P)
+```
+
+Next, we can use `apply` to calculate the density of each BMI category for each age group.
+
+Note that we are creating a contingency table between BMI (rows) and Age (columns), so when
+`apply` is called, we need the 2 to specify we are performing the density calculation on each column.
+
+`melt` is then used to convert the dataframe into long form where we then specify the column names. This becomes
+much easier to work and plot with.
+
+```{r manual }
+# Use apply on DF to get frequency of each group
+DF_freq <- apply(DF, 2, function(x) x/sum(x))
+
+# Load reshape2 and use melt on DF to create DF_melted
+DF_melted <- melt(DF_freq)
+DF_freq[,1:6]
+head(DF_melted)
+
+# Change names of DF_melted
+names(DF_melted) <- c("FILL", "X", "value")
+```
+
+Now the plot will look a lot better than the above one.
+
+```{r manual plot}
+ggplot(DF_melted, aes(x = X, y = value, fill = FILL)) +
+  geom_bar(stat = "identity", position = "stack") +
+  BMI_fill + 
+  facet_grid(FILL ~ .) +
+  theme_solarized_2(light=FALSE)
+
+rm(DF_freq)
+rm(DF_melted)
+```
+
+### Merimeko/Mosaic Plot
+
+Mosaic plots have their place. Seemingly, we have found it here.
+More information can be [found on wiki](https://en.wikipedia.org/wiki/Mosaic_plot), but we'll continue on with the exercises.
+
+I won't go into the full description of the functions called here - but it's quite ingenious. The main goal
+is to create individual bar plots that have a width and a height. The width will be determined by the density
+of each age group. Height is determined by what the density we calculated above.
+
+```{r mosaic start}
+# The initial contingency table
+DF <- as.data.frame.matrix(table(chis.df.w$SRAGE_P, chis.df.w$RBMI))
+
+# Add the columns groupsSum, xmax and xmin. Remove groupSum again.
+DF$groupSum <- rowSums(DF)
+DF$xmax <- cumsum(DF$groupSum)
+DF$xmin <- DF$xmax - DF$groupSum
+
+# The groupSum column needs to be removed
+DF$groupSum <- NULL
+
+# Copy row names to variable X
+DF$X <- row.names(DF)
+```
+
+Just like before, we'll melt the table into a nicer dataframe and use `dplyr` to give us
+the densities of each BMI categories by age, which we'll use as the starting points for each
+bar plot per age - like a single bin.
+
+```{r mosaic melty}
+# Melting
+DF_melted <- melt(DF, id.vars = c("X","xmin","xmax"), variable.name = "FILL")
+
+# dplyr call to calculate ymin and ymax
+DF_melted <- DF_melted %>% 
+  group_by(X) %>% 
+  mutate(ymax = cumsum(value/sum(value)),
+         ymin = ymax - value/sum(value))
+```
+
+The resulting plot:
+
+```{r mosaic plot}
+ggplot(DF_melted, aes(ymin = ymin, 
+                 ymax = ymax,
+                 xmin = xmin, 
+                 xmax = xmax, 
+                 fill = FILL)) + 
+  geom_rect(colour = "light grey") +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0)) +
+  BMI_fill +
+  theme_solarized_2(light=FALSE)
+```
+
+### Adding Statistics
+
+What happens now if we add in some statistical values? We'll use the chi-squared test to calculate the
+Pearson residuals, and we'll use that to plot and get an understanding of how sets of age groups are
+represented within each BMI category.
+
+We'll be pulling from the `chisq.test` function, and extracting `residuals`. The results are merged with
+our data from above.
+
+```{r chisq stats}
+results <- chisq.test(table(chis.df.w$RBMI, chis.df.w$SRAGE_P))
+
+# Melt results$residuals and store as resid
+resid <- melt(results$residuals)
+
+# Change names of resid
+names(resid) <- c("FILL", "X", "residual")
+
+# merge the two datasets:
+DF_all <- merge(DF_melted, resid)
+```
+
+Now we can plot these statistics and use a gradient scale to represent the high and low ends.
+
+```{r chisq plot}
+ggplot(DF_all, aes(ymin = ymin, 
+                   ymax = ymax,
+                   xmin = xmin, 
+                   xmax = xmax, 
+                   fill = residual)) + 
+  geom_rect() +
+  scale_fill_gradient2(low = "#f00000", high = "#2c003a") +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0)) +
+  theme_solarized_2(light = FALSE)
+```
+
+Nice. Now we'll just add a few text items to help add clarity. Feel free to delve into the code and
+understand it. We're essentially just finding a midpoint on the x-axis per bin to place the age labels,
+and then finding a midpoint on each y-category (for the last x) to put the BMI Category.
+
+```{r chisq plot labels}
+# Position for labels on x axis
+DF_all$xtext <- DF_all$xmin + (DF_all$xmax - DF_all$xmin)/2
+
+# Position for labels on y axis (don't change)
+index <- DF_all$xmax == max(DF_all$xmax)
+DF_all$ytext <- DF_all$ymin[index] + (DF_all$ymax[index] - DF_all$ymin[index])/2
+
+# Plot
+ggplot(DF_all, aes(ymin = ymin, ymax = ymax, xmin = xmin, 
+                   xmax = xmax, fill = residual)) + 
+  geom_rect(col = "light grey") +
+  # geom_text for ages (i.e. the x axis)
+  geom_text(aes(x = xtext, 
+                label = X),
+            y = 1,
+            size = 3,
+            angle = 90,
+            hjust = 1,
+            show.legend = FALSE) +
+  # geom_text for BMI (i.e. the fill axis)
+  geom_text(aes(x = max(xmax), 
+                y = ytext,
+                label = FILL),
+            size = 3,
+            hjust = 1,
+            show.legend  = FALSE) +
+  scale_fill_gradient2(low = "#f00000", high = "#2c003a") +
+  theme_solarized_2(light=FALSE) +
+  theme(legend.position = "bottom") +
+  labs(x = "Cum. No. Of Respondents", y = "Proportion") +
+  ggtitle("Representation of Age and its Distribution Over BMI")
+```
+
+A little tough to read, but we now have the labels in place to make it comprehensible. It's a job well done.
+
+## General Mosaic Plot Function
+
+Now that we've gone through that whole process of comparing two variables and how they interact with each
+other, it would be useful to have the ability to generalize the steps and input any dataset.
+
+Datacamp basically did it for us, but it's a compilation of the above steps into a single function.
+
+```{r general mosaic}
+# Script generalized into a function
+mosaicGG <- function(data, X, FILL) {
+  
+  # Proportions in raw data
+  DF <- as.data.frame.matrix(table(data[[X]], data[[FILL]]))
+  DF$groupSum <- rowSums(DF)
+  DF$xmax <- cumsum(DF$groupSum)
+  DF$xmin <- DF$xmax - DF$groupSum
+  DF$X <- row.names(DF)
+  DF$groupSum <- NULL
+  DF_melted <- melt(DF, id = c("X", "xmin", "xmax"), variable.name = "FILL")
+  DF_melted <- DF_melted %>% 
+    group_by(X) %>% 
+    mutate(ymax = cumsum(value/sum(value)),
+           ymin = ymax - value/sum(value))
+  
+  # Chi-sq test
+  results <- chisq.test(table(data[[FILL]], data[[X]])) # fill and then x
+  resid <- melt(results$residuals)
+  names(resid) <- c("FILL", "X", "residual")
+
+  # Merge data
+  DF_all <- merge(DF_melted, resid)
+  
+  # Positions for labels
+  DF_all$xtext <- DF_all$xmin + (DF_all$xmax - DF_all$xmin)/2
+  index <- DF_all$xmax == max(DF_all$xmax)
+  DF_all$ytext <- DF_all$ymin[index] + (DF_all$ymax[index] - DF_all$ymin[index])/2
+  
+  # plot:
+  g <- ggplot(DF_all, aes(ymin = ymin,  ymax = ymax, xmin = xmin, 
+                          xmax = xmax, fill = residual)) + 
+  geom_rect(col = "white") +
+  geom_text(aes(x = xtext, label = X),
+            y = 1, size = 3, angle = 90, hjust = 1, show.legend = FALSE) +
+  geom_text(aes(x = max(xmax),  y = ytext, label = FILL),
+            size = 3, hjust = 1, show.legend = FALSE) +
+  scale_fill_gradient2("Residuals",low = "#f00000", high = "#2c003a") +
+  scale_x_continuous("Individuals", expand = c(0,0)) +
+  scale_y_continuous("Proportion", expand = c(0,0)) +
+  theme_solarized_2(light=FALSE) +
+  theme(legend.position = "bottom")
+  print(g)
+}
+```
+
+Now we can adapt input whatever data we want. Let's try out the `mtcars` dataset and compare `hp` vs `carb`.
+
+```{r mosaic cars}
+mosaicGG(mtcars, "cyl", "am")
+```
+
+Lots of functionality here and gives us another tool to use!
