@@ -1,0 +1,339 @@
+---
+title: "Worlds End Traverse Analysis"
+author: "Tomas Castillo"
+date: "June 30, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("C:/Users/Tomas/OneDrive/Projects/Trail_DataProject/Worlds End Traverse/")
+we.traverse <- read.csv("data/WorldsEndTraverse.csv", stringsAsFactors = F)
+
+library(ggplot2)
+library(ggthemes)
+library(dplyr)
+library(scales)
+library(gridExtra)
+```
+
+## Exploring Personal Data
+
+Last weekend, I took a trip out to Worlds End State Park in the Northeast part of Pennyslvania. It's nestled in the heart of
+the Endless Mountains and the Loyalsock State Forest. The route that I picked was not my own choosing,
+but is in fact a race course for the Worlds End 100k.
+
+I was treating this run as a training experience and a way to explore some of the beautiful and wild parts of the
+state. And that it was.
+
+I was exploring some other blogs on racing and came across someone who did an analysis on their own training efforts that
+compared their average paces in each category of grades. I hadn't thought of looking at this approach and decided to pull out
+my effort at Worlds End to see how my climbing pace looks at different grades.
+
+I tracked the Traverse with a Suunto Ambit3 Peak, and then pulled the data out from Movescount.
+
+This way, the data looks similar to what would show up on Movescount, Strava, TrainingPeaks, MapMyRun, or whatever else
+might display the GPS data.
+
+If we can explore this to see what we've got, we'll first just do an overview of what the climbing profile looks like.
+
+```{r vert profile, echo = F}
+ggplot(subset(we.traverse, Altitude > 0), aes(x = miles, y = Altitude)) +
+  geom_line(size = 0.5) + 
+  theme_hc() +
+  labs(x = "Distance [miles]", y = "Altitude [ft]")
+```
+
+Some nice climbs and descents, and all of it was technical! Ha... good stuff. I should point out that
+the race is a 100k category and comes out to 63 miles. I've got a few excuses for not finishing the full 63 miles, but
+a majority of the reason was my knees had taken a beating through all the technicality, the heat had taken its toll on
+my overall strength, and it was getting late and I didn't want to run in the dark since I was alone (I do, in fact,
+get scared). My total mileage came out to 45 miles. Not bad if you ask me, especially considering the longest
+I had run before was 36 miles.
+
+Now that we've got that explanation out of the way, let's look a the paces and how the grade of elevation affects it.
+
+First, we'll just look at the grade of the course.
+
+```{r grade, echo = F}
+ggplot(we.traverse, aes(x = miles, y = Grade)) +
+  geom_point() +
+  theme_hc() +
+  labs(x = "Distance [miles]", y = "Grade [%]")
+```
+
+Something to notice about the data and then to think about in terms of what it means. There are some points over 100%, and
+even some descents over -200%. Recall that grade is vertical gain/horizontal distance, as a percent (so 1% = 1 ft up for 100 ft
+horizontal).
+
+Then, if we apply some old fashioned trigonometry, we can figure out the angle. The max grade was
+`r format(max(we.traverse$Grade),digits =3)`% giving it an angle (in degrees) of `r format(atan(max(we.traverse$Grade))*180/pi, digits = 3)`.
+That's pretty steep, but actually not unreasonable - it's just really steep.
+
+The negative grade of 200% gives us a descent angle of 64. In thinking back, I can probably guess at which point that was
+because I was going on very slowly and trying to jump from rock to rock as I was descending.
+
+Alright, so we'll set up some bins that will categorize the grade. The reasoning behind the categories below are what goes from
+extremely steep, towards a more runnable grade, to flat. Ideally, the grade would be stepped in 2.5% increments, but because
+of the large range, we'll lump some of the more extreme grades together.
+
+
+```{r Grade Histograme}
+ggplot(we.traverse, aes(Grade)) +
+  geom_histogram(binwidth = 0.02) +
+  coord_trans(y = 'sqrt') +
+  scale_y_continuous(minor_breaks = seq(0, 6000, 150),
+                     breaks = seq(0, 10000, 2500)) +
+  scale_x_continuous(breaks = seq(-2, 150, 0.25),
+                     labels = paste0(seq(-2, 150, 0.25)*100, "%")) +
+  theme_hc() +
+  theme(panel.grid.minor.y = element_line(color = "#d5dbdd", size = 0.5))
+```
+
+As one would expect, most of the grades are actually reasonable and below 50% (both positive and negative).
+We'll add the bins and then plot accordingly.
+
+```{r Setting Up Grades, message = F}
+# Not too many steep grades
+gradeBin <- c(-2.5, -1, -0.6, -0.3, -0.25, -0.20, -0.15, -0.125, -0.10, -0.075, -0.05, -0.025, 0,
+              0.025, 0.05, 0.075, 0.10, 0.125, 0.15, 0.20, 0.25, 0.3, 0.6, 1, 2.5)
+```
+
+```{r time and bins, echo = F, message = F}
+
+# Initialize Grade Rank Column
+we.traverse$gradeRank <- 0
+
+# Step through list of grades and categorize
+for (i in 1:(length(gradeBin) - 1)) {
+  we.traverse <- we.traverse %>% 
+    mutate(gradeRank =
+             ifelse((gradeRank == 0 & Grade >= gradeBin[i] & Grade < gradeBin[i + 1]),
+                    i,
+                    gradeRank))
+}
+
+
+## Format the Local Time into time format and add duration in seconds
+we.traverse$LocalTime <- as.POSIXct(we.traverse$LocalTime)
+startTime <- we.traverse$LocalTime[1]
+we.traverse <- we.traverse %>% mutate(Duration = as.numeric(LocalTime - startTime))
+```
+
+As I was going through this, I realized that we should take out any points that have a speed of 0. The reason for
+that is it's just time that I was still at an aid station (my girlfriend's car), resting, or I was navigating
+trying to find my way back on the trail. Since my watch also records `Cadence`, we can take out any points
+I was standing still with a `Cadence` of 0 as well.
+
+Because we're only interested in the metrics related to moving, we can subset the data.
+
+```{r eliminate stops}
+we.traverse <- subset(we.traverse, Speed > 0 & Cadence > 0)
+```
+
+
+```{r grade speed}
+ggplot(we.traverse, aes(x = gradeRank, y = speed.km)) + 
+  geom_point(position = position_jitter(width = 1), alpha = 0.2, col = '#b0bcbf') +
+  geom_point(stat = 'summary', fun.y = mean, col = '#1b5b83', size =2) +
+  scale_x_continuous("Grade Bins",
+                     breaks = seq(1, 25,1),
+                     labels = paste0(format(gradeBin*100, digits = 0),"%")) +
+  scale_y_continuous("Speed [km/h]") +
+  theme_hc() +
+  geom_smooth(method = 'lm', formula = y ~ x*I(x^2)) +
+  theme(axis.text.x = element_text(size = 8,
+                                   angle = 90, vjust = 0.5),
+        panel.grid.major.x = element_line(color = "light grey", 
+                                          linetype = 2))
+```
+
+While this fit seems to work, I don't usually look at my speed, but rather at my pace. So let's convert
+`Speed` to `pace`. I've got it in _km/h_ so we'll need to do a few mathematical transformations first.
+
+```{r adding pace, message = FALSE}
+we.traverse <- we.traverse %>% 
+  mutate(pace = (speed.km*(0.621/60))^(-1))
+
+```
+
+We'll do the same plot as above, but this time, with pace on the y-axis instead of speed.
+
+```{r grade pace, warning=F}
+ggplot(we.traverse, aes(x = gradeRank, y = pace)) + 
+  geom_point(position = position_jitter(width = 1, height = 3), alpha = 0.2, col = '#b0bcbf') +
+  geom_point(stat = 'summary', fun.y = mean, col = '#1b5b83', size =2) +
+  scale_x_continuous("Grade",
+                     breaks = seq(1, 25,1),
+                   labels = paste0(format(gradeBin*100, digits = 0),"%")) +
+  scale_y_continuous("Pace [min/mile]", breaks = seq(0,75,5), 
+                     labels = seq(0,75,5), limits = c(0,40)) +
+  theme_hc() +
+  geom_smooth(method = 'lm', formula = y ~ x*I(x^2)) +
+  theme(axis.text.x = element_text(size = 8,
+                                   angle = 90, vjust = 0.5),
+        panel.grid.major.x = element_line(color = "light grey", 
+                                          linetype = 2))
+```
+
+Good stuff.
+
+So what does a linear model look like for pace over grade? What if we throw in some of the other variables?
+
+Let's start with just `pace ~ grade rank`.
+
+```{r pace grade rank}
+pg <- lm(pace ~ gradeRank, data = we.traverse)
+summary(pg)
+```
+
+Great! While it shows that `gradeRank` or `Grade` are both highly correlated... that's because it's the only
+variable. We can do better. The low $R^2$ value doesn't really do much either. So let's look at a few
+more variables.
+
+Let's back up real quick and evaluate the difference between `pace` and `speed`.
+
+While it's helpful to think in terms of pace when running, because of the math involved to transform one
+metric to another, `pace` has much greater variance depending on how fast/slow I'm going.
+
+Recall:
+$$ pace = (speed[\frac{km}{hr}] * \frac{0.621 miles}{1 km} * \frac{1 hour}{60 min})^{-1} $$
+
+If we look at both of those metrics compared side by side, Speed scales much better for lower and faster speeds.
+We'll stick with using speed instead of pace, and we can transform the variable later when necessary.
+
+```{r pace cadence, echo = F, warning = F}
+
+g1 <- ggplot(we.traverse, 
+             aes(x = Cadence, y = speed.km)) + 
+  geom_point(position = "jitter", alpha = 0.3) +
+  ggtitle("Speed vs Cadence") +
+  labs(y = "Speed [km/h]") +
+  theme_hc() +
+  scale_y_continuous(breaks = seq(0, 100, 10),
+                     labels = seq(0, 100, 10),
+                     limits = c(0, 90))
+
+g2 <- ggplot(we.traverse, 
+             aes(x = Cadence, y = pace)) + 
+  geom_point(position = "jitter", alpha = 0.3) +
+  ggtitle("Pace vs Cadence") +
+  labs(y = "Pace [min/mi]") +
+  theme_hc() +
+  scale_y_continuous(breaks = seq(0, 100, 10),
+                     labels = seq(0, 100, 10),
+                     limits = c(0, 90))
+
+grid.arrange(g1, g2, ncol = 2)
+
+rm(g1, g2, pg)
+```
+
+In going over these data, I began to think of other ways to categorize things and thought of one that may be helpful, especially
+in terms of ultras -- whether I'm walking or running. An easy way to pull that out would be to look at the cadence. While this
+isn't always the case, a good indicator of whether I'm running vs walking/hiking is a threshold value in cadence.
+
+Obviously this will vary depending on the person, so I'll have a look at what my values look like.
+
+```{r walk cadence, echo = F}
+ggplot(we.traverse, aes(Cadence)) +
+  geom_histogram(binwidth = 5) +
+  scale_x_continuous(breaks = seq(0, 150, 5)) +
+  theme_hc() +
+  ggtitle("Cadence over the Traverse")
+```
+
+It would appear that I typically run at between 80-90 spm, while I walk at around 55-60 spm. Note that _spm_ is
+_steps per minute_ measuring a single leg, not both. A good threshold value would be right at 70.
+
+We can now add a cateogry to our data that tells us whether we are walking or not and then see if that makes sense in terms of
+speed.
+
+```{r walk category, echo = FALSE}
+we.traverse <- we.traverse %>% 
+  mutate(MovementType = ifelse(
+    Cadence < 70, 1, 0)
+  )
+```
+```{r plot walk or run}
+ggplot(we.traverse, aes(x = speed.km, y = Cadence, col = factor(MovementType))) +
+  geom_point() +
+  theme_hc() +
+  scale_color_hc(name = "Movement",
+                 breaks = c(0, 1),
+                 labels = c("Running", "Walking"))
+```
+
+Hmm, something seems off. Maybe it's not as simple as I thought.
+Even when my cadence was in the "walking" region, my speed seemed to still
+indicate I was at running speed. Perhaps, on the downhills, I was taking longer strides?
+
+```{r vertical cadence}
+ggplot(we.traverse, aes(x = Duration/3600, y = Cadence)) +
+  geom_point(aes(col = factor(MovementType))) +
+  theme_hc() +
+  scale_color_hc(name = "Movement",
+                 breaks = c(0, 1),
+                 labels = c("Running", "Walking")) +
+  scale_x_continuous("Duration [Hours]",
+                     breaks = seq(0, 12, 1),
+                     labels = seq(0, 12, 1)) +
+  geom_line(aes(y = Altitude))
+```
+
+All I'm gathering from this is there is no easy distinction to determine whether I'm walking or not. Because of that,
+we will remove the categorical variable for `MovementType`. It might be easier to extract than I realize, but for
+now we'll remove that category and can explore it later.
+
+```{r remove MovementType, echo = F}
+we.traverse <- we.traverse %>% select(-MovementType)
+```
+
+## Developing a Model
+Now let's look at a few of the correlations between the metrics recorded.
+
+```{r speed est, echo = F}
+model.sc <- lm(speed.km ~ Cadence, data = we.traverse)
+summary(model.sc)
+
+model.scA <- lm(speed.km ~ Cadence + Altitude, data = we.traverse)
+summary(model.scA)
+
+model.scHA <- lm(speed.km ~ Cadence + Altitude + HeartRate, data = we.traverse)
+summary(model.scHA)
+
+model.scHG <- lm(speed.km ~ Cadence + Grade + HeartRate, data = we.traverse)
+summary(model.scHG)
+
+model.scHGA <- lm(speed.km ~ Cadence + Altitude + HeartRate + Grade, data = we.traverse)
+summary(model.scHGA)
+
+
+## Clear some memory
+rm(model.sc, model.scA, model.scHA, model.scHG, model.scHGA)
+```
+
+It may take a little to look through the different models, but we're just comparing the different variables and they're output effect.
+
+Something else that may be quite helpful is the duration to which the event has taken. For example, look at the
+`gradeRank vs Pace` graph, and around the 0% - 2.5% grade region, there are some high points, but also some low points
+that are in the 'walking' range (lower).
+
+2.5% is a pretty mild grade. However, depending on the time of day and how my legs were feeling, I may have decided
+to walk even a small hill instead. It may not always be an influencing factor, but I think it may shed some additional
+light on the entire picture.
+
+Let's add duration to our model.
+
+```{r speed est duration, echo =F}
+
+model.scHGAD <- lm(speed.km ~ Cadence + Altitude + HeartRate + Grade + Duration, data = we.traverse)
+summary(model.scHGAD)
+
+model.scHGADT <- lm(speed.km ~ Cadence + Altitude + HeartRate + Grade + Duration + Temperature, data = we.traverse)
+summary(model.scHGADT)
+
+rm(model.scHGADT, model.scHGAD)
+```
+
+This part is still under exploration and am not sure how to proceed here, but will come back to it once I learn more.
