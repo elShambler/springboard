@@ -32,12 +32,12 @@ are interested in a more detailed plan of attack to a race.
 
 Companies that do this would be GPS watch manufacturers - the
 most popular of the two in the ultra marathon community are
-*Suunto* and *Garmin*. The data produced here would give
+**Suunto** and **Garmin**. The data produced here would give
 them additional software to add to their physical product.
 
 Two additional companies that could benefit would be software
 companies already geared towards pulling all GPS data together
-from any watch company - *Training Peaks* and *Strava*.
+from any watch company - **Training Peaks** and **Strava**.
 
 One other ideas would be for this software to be part of a _running_
 branch of a popular cycling estimator - [best bike split](https://www.bestbikesplit.com/).
