@@ -1,0 +1,233 @@
+---
+title: "Logistic Regression - NHIS"
+author: "Tomas"
+date: "August 28, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+```
+
+## Regression with Binary Outcomes
+
+### Logistic Regression
+***
+
+The text below is adapted from documents provided from Harvard University's statistical software
+workshop along with added problems from Springboard.
+
+This far we have used the `lm` function to fit our regression models.
+`lm` is great, but limited-in particular it only fits models for
+continuous dependent variables. For categorical dependent variables we can use the `glm()' function.
+
+For these models we will use a different dataset, drawn from the 
+National Health Interview Survey. From the CDC website:
+
+> The National Health Interview Survey (NHIS) has monitored
+> the health of the nation since 1957. NHIS data on a broad
+> range of health topics are collected through personal
+> household interviews. For over 50 years, the U.S. Census
+> Bureau has been the data collection agent for the National
+> Health Interview Survey. Survey results have been
+> instrumental in providing data to track health status,
+> health care access, and progress toward achieving national
+> health objectives.
+
+Load the National Health Interview Survey Data [^1]:
+```{r load NHIS data, message=FALSE}
+setwd("C:/Users/castillo/OneDrive/School/Springboard/FoundationsDS/in-depth/LogisticProblemSet/")
+NH11 <- readRDS("dataSets/NatHealth2011.rds")
+labs <- attributes(NH11)$labels
+```
+
+## Logistic Regression Example
+
+Let's predict the probability of being diagnosed with hypertension based on `age_p`, `sex`, `sleep`, and `bmi`.
+First, we'll check the structure of hypertension (`hypev`) and reformat the factoring levels.
+
+```{r refactor hypertension}
+str(NH11$hypev) # Check the structure
+
+levels(NH11$hypev) # Check the leveles
+
+summary(NH11$hypev) # Current state - note the NAs
+
+## Collapse all missing values to NA
+NH11$hypev <- factor(NH11$hypev, levels = c("2 No", "1 Yes"))
+summary(NH11$hypev) # Updated output
+```
+
+With the factors adjusted, we'll now create our initial regression model.
+
+```{r Initial regression model}
+hyp.out <- glm(hypev ~ age_p + sex + sleep + bmi,
+               data = NH11,
+               family = 'binomial')
+
+coef(summary(hyp.out))
+```
+
+### Logistic Regression Coefficients
+
+The generalized linear models (`glm`) use link functions, so raw coefficients are difficult
+to interpret. For example, the age coefficient of 0.06 in the previous model tells us that for every
+one unit increase in age, the log odds of hypertension diagnosis increases by 0.06.
+Since most of us are not used to thinking in log odds, this is not too helpful!
+
+One solution is to transform the coeffcients to make them easier to interpret:
+
+```{r initial regression transformation}
+hyp.out.tab <- coef(summary(hyp.out))
+hyp.out.tab[, 'Estimate'] <- exp(coef(hyp.out))
+hyp.out.tab
+```
+
+### Generating Predicted Values
+
+In addition to transforming the log-odds produced by `glm` to odds, we can use the
+`predict()` function to make direct statements about the predictor in our model. For example, we can ask
+"How much more likely is a 63 year old female to have hypertension compared to a 33 year old female?".
+
+To answer this question, we'll create a custom dataset that has the predictors set at specific levels.
+
+```{r Predicting levels}
+## Createing the dataset from our full NH11
+predData <- with(NH11,
+                 expand.grid(age_p = c(33, 63),
+                             sex = "2 Female",
+                             bmi = mean(bmi, na.rm = TRUE),
+                             sleep = mean(sleep, na.rm = TRUE)))
+
+## Predict hypertension at those levels
+cbind(predData, predict(hyp.out,
+                        type = 'response',
+                        se.fit = TRUE,
+                        interval = 'confidence',
+                        newdata = predData))
+```
+
+This tells us that a 33 year old female has a 13% probability of
+having been diagnosed with hypertension, while a 63 year old female has a 48% probability of having been
+diagnosed.
+
+## Packages for Computing and Graphing Predicted Values
+***
+
+Instead of doing all this ourselves, we use the `effects` package to compute quantities of interest
+for us (cf. the Zelig package).
+
+```{r effects package, warning=FALSE}
+library(effects)
+plot(allEffects(hyp.out))
+```
+
+## Exercise: Logistic Regression
+***
+
+Now it's time to give this a try for ourselves.
+
+Using the NH11 data set from above:
+
+1. Use `glm` to conduct a logistic regression to predict ever worked (`everwrk`) using age (`age_p`)
+and marital status (`r_maritl`).
+
+```{r ever worked initial}
+summary(NH11$everwrk)
+
+wrkd.mod1 <- glm(everwrk ~ age_p + r_maritl, 
+            data = NH11,
+            family = 'binomial')
+
+summary(wrkd.mod1)
+```
+
+There are quite a few NAs and some other non-yes/no. We are really only interested in the Yes/No responses. But if we
+were to exclude non-Yes/No's, that still leaves us with 12153 Yes's and 1887 No's. Since `everwrk` is our dependent variable,
+we can't really make up values for it, and since each observation represents a single person's response, it's best if
+we eliminate that person from our dataset for this model.
+
+The other variable that we'll look at is `age_p`, and `r_maritl`.
+```{r summary of age and marital status}
+summary(NH11$age_p)
+hist(NH11$age_p, breaks = seq(18, 85, 1))
+
+summary(subset(NH11, !is.na(everwrk))$r_maritl)
+levels(NH11$r_maritl)
+plot(NH11$r_maritl,
+     legend.text = levels(NH11$r_maritl))
+
+NH11 %>% group_by(r_maritl) %>% summarise(count = n())
+
+```
+
+By looking at the variables we're going to be using for our model, we'll make a few adjustments:
+
+1. Remove all NA observations of `everwrk`.
+
+2. Filter the ages to exclude 18 and 85-year olds since those numbers are most likely erroneous points. It's a survey, so probably has to do
+with the surveyor not getting an age but determining the subject was young (18) or old (85) (just an assumption).
+
+3. We are only concerned with the binary response of `everwrk`: that is `1 Yes` or `2 No`.
+
+4. Include only the categories of marital status with a response (there are 8).
+
+```{r subset of NH11}
+NH11.sub <- subset(NH11, age_p > 18 & age_p < 85 & !is.na(everwrk) & 
+                     (everwrk == "1 Yes" | everwrk == "2 No"))
+```
+
+Now that we have that set up - let's refine our model and see if it's improved.
+
+```{r correlation matrix}
+wrkd.mod2 <- glm(everwrk ~ age_p + r_maritl,
+                 data = NH11.sub,
+                 family = "binomial")
+
+summary(wrkd.mod2)
+
+```
+
+The first model gave us an AIC of 10,429; while the second one has a value of 9406. Not a huge improvement, but better.
+
+
+2. Predict the probability of working for each level of marital status.
+
+We can use the `predict` function to give us probabilities of whether or not someone was working, regardless of `age_p`.
+
+```{r predicting}
+## Setup variable for proper r_maritl levels (non-zero)
+usable.maritl <- levels(NH11.sub$r_maritl)[
+  which(table(NH11.sub$r_maritl) > 0)]
+
+## Setup a predicting
+predData <- with(NH11.sub,
+                 expand.grid(r_maritl = usable.maritl,
+                             age_p = mean(bmi, na.rm = TRUE)))
+
+cbind(predData,
+      predict(wrkd.mod2,
+              type='response',
+              se.fit=TRUE,
+              interval = 'confidence',
+              newdata = predData))
+
+```
+
+What does this tell us? Since we are holding the age constant at the average for the entire dataset, we are only
+varying the marital status. When looking at the graph of the populated marital status, the most popular category
+is "Married - spouse in household". Translation - if you are married and have a spouse in the household, there is
+a 20% that you have worked. Whereas if you are widowed, there is a 30% chance you have worked.
+
+We can look at our independent variable's effect on whether or not an individual has worked through use of the `effects` plot.
+
+```{r effect of working}
+plot(allEffects(wrkd.mod2))
+```
+
+While not the most useful of information, or best prediction, it's at least a good exercise into determinig what the
+data tells us.
+
+
+[^1]: [CDC Website](http://www.cdc.gov/nchs/nhis.html)
