@@ -95,7 +95,7 @@ Ultimately, I was able to get data back into a wide format where each line repre
 
 ### Code for Wrangling
 
-Code for the wrangling process is contained in the appendix and in the R-Markdown file used to create this document, which can be viewed on my [github page](https://github.com/elShambler/).
+Code for the wrangling process is contained in the appendix and in the R-Markdown file used to create this document, which can be viewed on my [github page](https://github.com/elShambler/springboard/tree/master/CapstoneProject).
 
 
 
